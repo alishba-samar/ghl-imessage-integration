@@ -1,0 +1,103 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum SuppressionReason {
+  STOP
+  UNSUBSCRIBE
+  MANUAL
+  COMPLAINT
+  INVALID
+}
+
+model Integration {
+  id                     String    @id @default(uuid())
+  locationId             String    @unique
+  ghlAccessToken         String
+  ghlRefreshToken        String
+  tokenExpiresAt         DateTime?
+  conversationProviderId String?
+  provider               String    @default("sendblue")
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+}
+
+model Message {
+  id                String           @id @default(uuid())
+  locationId        String
+  contactId         String
+  conversationId    String?
+  direction         MessageDirection
+  /// Contact's phone in E.164: the recipient for OUTBOUND, the sender for INBOUND.
+  phone             String?
+  channel           String           @default("imessage")
+  /// Channel actually used, as reported by the provider: "imessage" | "sms" | "rcs".
+  service           String?
+  /// True when the provider fell back from iMessage to SMS.
+  wasDowngraded     Boolean?
+  body              String
+  mediaUrl          String?
+  providerMessageId String?
+  /// GHL's message id (unique: one GHL message maps to exactly one of our rows).
+  ghlMessageId      String?          @unique
+  campaignId        String?
+  campaignStep      Int?
+  idempotencyKey    String?          @unique
+  status            MessageStatus    @default(QUEUED)
+  errorCode         String?
+  errorMessage      String?
+  retryCount        Int              @default(0)
+  /// Set atomically by whoever claims the provider send; a message is sent only by the claimer.
+  dispatchedAt      DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([providerMessageId])
+  @@index([phone, direction, createdAt])
+}
+
+model Suppression {
+  id         String            @id @default(uuid())
+  locationId String
+  contactId  String?
+  phone      String
+  reason     SuppressionReason
+  createdAt  DateTime          @default(now())
+
+  @@unique([locationId, phone])
+}
+
+model Sender {
+  id           String   @id @default(uuid())
+  locationId   String
+  senderNumber String
+  provider     String
+  status       String   @default("active")
+  dailyLimit   Int?
+  hourlyLimit  Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

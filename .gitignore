@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+
+# Generated Prisma client (rebuilt by `prisma generate` on install/build)
+src/generated
+
+*.log
