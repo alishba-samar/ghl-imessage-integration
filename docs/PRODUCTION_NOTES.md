@@ -52,6 +52,11 @@ Known gaps to resolve before production. One bullet per concern, with the sugges
 - **Custom Webhook retry behaviour is undocumented.** GHL's help docs don't say whether failed Custom Webhook calls are retried; a 5xx from us (e.g. DB down) may silently drop that campaign step. *Fix:* monitor 5xx on this route; a Marketplace workflow action would give defined behaviour.
 - **Tags are applied to the contact found by phone.** Like inbound sync, tagging uses the phone lookup, which may not be the contact the workflow messaged (see "Reply contact matching" above).
 
+## Infrastructure
+
+- **Run the app in the same region as the database.** From the dev machine each Neon query takes ~250ms and a new connection ~2s, with occasional dropped connections ("Connection terminated unexpectedly"); this is what made the test suite need retries. *Fix:* deploy in AWS us-east-2 (or move the DB next to the app). The Prisma pool now keeps idle connections for 60s, allows 15s to connect, and gives interactive transactions 10s to start (the 2s default caused P2028 errors).
+- **Transient DB errors surface as 500s.** We don't retry DB writes automatically (it could double-apply). Webhook senders retry (Sendblue 3x, GHL up to 12x) and our handlers are idempotent, but API callers must retry with the same idempotency key. *Fix:* document this for API/workflow callers; consider a retry wrapper for read-only queries.
+
 ## Logging
 
 - **`LOG_LEVEL=debug` logs personal data.** Raw Sendblue responses include phone numbers and message content (never credentials). *Fix:* keep production at `info`; if debug is needed, enable it briefly and make sure log retention/access fits the data.
