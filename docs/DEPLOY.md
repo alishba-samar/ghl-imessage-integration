@@ -15,7 +15,7 @@ Set on the service itself (Railway dashboard → service → **Settings**, or th
 
 | Setting | Value |
 |---|---|
-| Source | GitHub `alishba-samar/ghl-imessage-integration`, branch `main` (auto-deploys on push) |
+| Source | GitHub `alishba-samar/ghl-imessage-integration`, branch `main`. Auto-deploy on push needs the GitHub access step below. |
 | Region | **US East (Virginia)**, `us-east4-eqdc4a`: closest Railway region to the Neon database (AWS us-east-2) |
 | Build command | `npm ci --include=dev && npm run build` |
 | Start command | `npm start` |
@@ -56,7 +56,7 @@ Changing a variable redeploys the service.
 
 ### Deploys
 
-- **Every push to `main` deploys automatically.** Run `npm test` before pushing.
+- **Auto-deploy on push is not active yet.** Creating Railway's GitHub deploy trigger failed with "no one in the project has access to" the repo: Railway's GitHub app can't see it, so Railway can't pull new commits (deploys reuse the last fetched commit, `ce05146`). To fix: on GitHub, **Settings → Applications → Installed GitHub Apps → Railway → Configure → Repository access**, add `ghl-imessage-integration` (or allow all repositories), save; then in Railway, service **Settings → Source**, check the repo is connected with branch `main` and auto-deploy on. After that, every push to `main` deploys; run `npm test` before pushing.
 - Check status in the dashboard (**Deployments** tab) or with the CLI: `railway deployment list --service ghl-imessage-integration --json`.
 - Logs: dashboard **Deploy Logs** / **HTTP Logs**, or `railway logs --service ghl-imessage-integration`. Logs are JSON in production.
 - `RAILWAY_API_TOKEN` in `.env` is a **workspace** token: it works with the GraphQL API and with CLI commands that take explicit `--project/--environment/--service`, but `railway whoami` and other user-level commands report "Unauthorized" with it.
