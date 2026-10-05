@@ -32,7 +32,7 @@ Known gaps to resolve before production. One bullet per concern, with the sugges
 - **Agency token failure breaks every location of that agency.** Agency-installed locations re-mint their token from the agency token when their own refresh fails; if the agency token's refresh fails too, all of them stop until the agency reinstalls. *Fix:* alert on `GHL agency token refresh failed`.
 - **Install/uninstall webhooks aren't handled.** An uninstalled location keeps its Integration row and tokens. *Fix:* handle GHL's `INSTALL` / `UNINSTALL` app webhooks; delete tokens on uninstall.
 - **No encryption key rotation.** Tokens are encrypted with one `TOKEN_ENCRYPTION_KEY`; losing or changing it forces every location to reinstall. *Fix:* keep the key in a secret manager with backups; the `v1:` prefix leaves room for multi-key rotation later.
-- **`Version: v3` is unverified against the live API.** The current docs list `v3` as the only option, but older examples use `2021-07-28`. *Fix:* confirm with the first real install; it's one constant in `src/ghl/http.ts`.
+- **`Version: v3` confirmed against the live API (2026-10-05).** A real install on the Aryze Tech sub-account succeeded via the agency flow, and a read-only `GET /conversations/search` with the Location token and `Version: v3` returned 200. Still unverified: which agency endpoint paths GHL answered (v3 or legacy); check the server log of that install for "trying legacy path".
 
 ## GHL Conversations
 
