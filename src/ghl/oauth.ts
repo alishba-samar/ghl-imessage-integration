@@ -30,8 +30,13 @@ export interface GhlTokens {
   scope?: string;
 }
 
+/**
+ * The redirect_uri sent on token requests. It must match the Redirect URL registered on the GHL app, which may
+ * differ from where this server runs (GHL_OAUTH_REDIRECT_URI), e.g. while the server sits behind a changing tunnel.
+ */
 export function redirectUri(): string {
-  if (!env.PUBLIC_BASE_URL) throw new GhlError('NOT_CONFIGURED', 'PUBLIC_BASE_URL is not set');
+  if (env.GHL_OAUTH_REDIRECT_URI) return env.GHL_OAUTH_REDIRECT_URI;
+  if (!env.PUBLIC_BASE_URL) throw new GhlError('NOT_CONFIGURED', 'GHL_OAUTH_REDIRECT_URI or PUBLIC_BASE_URL must be set');
   return `${env.PUBLIC_BASE_URL}/oauth/callback`;
 }
 

@@ -21,6 +21,9 @@ const envSchema = z
     // /oauth/callback and token refresh fail with a clear error until they're set.
     GHL_CLIENT_ID: optionalString,
     GHL_CLIENT_SECRET: optionalString,
+    // Redirect URL registered on the GHL app, sent as redirect_uri on token requests.
+    // Defaults to PUBLIC_BASE_URL + "/oauth/callback".
+    GHL_OAUTH_REDIRECT_URI: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),
     // Our custom conversation provider's id (same for every location). Saved on the Integration at install.
     GHL_CONVERSATION_PROVIDER_ID: optionalString,
     // "Version" header for GHL API calls. The current docs list "v3" as the only option.

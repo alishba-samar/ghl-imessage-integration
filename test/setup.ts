@@ -24,6 +24,7 @@ Object.assign(process.env, {
   GHL_WEBHOOK_PUBLIC_KEY: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
   TEST_GHL_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
   PUBLIC_BASE_URL: 'https://test.example',
+  GHL_OAUTH_REDIRECT_URI: '', // default: PUBLIC_BASE_URL + /oauth/callback (a test overrides it)
   // External providers: mock only. Blank (not unset) so dotenv can't fill in the real credentials.
   IMESSAGE_PROVIDER: 'mock',
   SENDBLUE_API_KEY: '',

@@ -1,5 +1,6 @@
 import { HttpResponse, delay } from 'msw';
 import { describe, expect, it } from 'vitest';
+import { env } from '../src/config/env';
 import { getGhlClient } from '../src/ghl/ghlClient';
 import { GhlError } from '../src/ghl/http';
 import { decryptSecret } from '../src/utils/crypto';
@@ -36,6 +37,22 @@ describe('GET /oauth/callback', () => {
     expect(decryptSecret(integration.ghlRefreshToken)).toMatch(/^refresh-\d+$/);
     expect(integration.conversationProviderId).toBe('test-provider-id');
     expect(integration.tokenExpiresAt!.getTime()).toBeGreaterThan(Date.now() + 23 * 3_600_000);
+  });
+
+  it('sends GHL_OAUTH_REDIRECT_URI as redirect_uri on code exchange and refresh when it is set', async () => {
+    const original = env.GHL_OAUTH_REDIRECT_URI;
+    env.GHL_OAUTH_REDIRECT_URI = 'https://example.com/oauth/callback';
+    try {
+      expect((await api().get('/oauth/callback?code=CODE-2')).status).toBe(200);
+      await prisma.integration.update({ where: { locationId: LOC }, data: { tokenExpiresAt: new Date(Date.now() + 60_000) } });
+      await getGhlClient(LOC);
+
+      const [exchange, refresh] = ghl.callsTo('POST', TOKEN);
+      expect(exchange.body).toMatchObject({ grant_type: 'authorization_code', redirect_uri: 'https://example.com/oauth/callback' });
+      expect(refresh.body).toMatchObject({ grant_type: 'refresh_token', redirect_uri: 'https://example.com/oauth/callback' });
+    } finally {
+      env.GHL_OAUTH_REDIRECT_URI = original;
+    }
   });
 
   it('returns 400 without a code, 502 when GHL rejects it, 400 for an agency token', async () => {
