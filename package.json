@@ -13,10 +13,11 @@
     "db:generate": "prisma generate",
     "postinstall": "prisma generate",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:deploy": "prisma migrate deploy"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
