@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/db';
+import { connectLocationFromAgency } from '../ghl/agency';
 import { verifyGhlSignature } from '../middleware/verifyGhlSignature';
 import { failGhlMessage, syncStatusToGhl } from '../services/ghlSyncService';
 import { dispatchMessage, sendIMessage } from '../services/sendService';
@@ -85,3 +86,45 @@ async function processOutbound(payload: OutboundPayload): Promise<void> {
   }
   await syncStatusToGhl(result.message.id);
 }
+
+// Marketplace app webhook (App Install event), per https://marketplace.gohighlevel.com/docs/webhook/AppInstall
+// and Authorization/TargetUserSubAccount: when an agency installs the app on a (new) location, GHL sends
+// { type: "INSTALL", installType: "Location", locationId, companyId, ... }. We mint that location's token
+// from the stored agency token. Other events are acknowledged and ignored.
+const appEventSchema = z.object({
+  type: z.string(),
+  installType: z.string().optional(),
+  locationId: z.string().optional(),
+  companyId: z.string().optional(),
+});
+
+ghlWebhooksRouter.post('/app', verifyGhlSignature, (req, res) => {
+  const parsed = appEventSchema.safeParse(req.body);
+  res.status(200).json({ ok: true });
+  if (!parsed.success) {
+    logger.warn('GHL app webhook payload not recognized; ignored');
+    return;
+  }
+  const event = parsed.data;
+  if (event.type !== 'INSTALL' || !event.locationId || !event.companyId) {
+    logger.info({ type: event.type, installType: event.installType }, 'GHL app webhook ignored');
+    return;
+  }
+  const { companyId, locationId } = event;
+  runInBackground('ghl-app-install', async () => {
+    const [integration, agency] = await Promise.all([
+      prisma.integration.findUnique({ where: { locationId }, select: { id: true } }),
+      prisma.agencyIntegration.findUnique({ where: { companyId }, select: { id: true } }),
+    ]);
+    if (integration) {
+      logger.info({ locationId }, 'App install webhook: location already connected');
+      return;
+    }
+    if (!agency) {
+      // A sub-account user installed it themselves: their OAuth callback brings a Location token instead.
+      logger.info({ locationId, companyId }, 'App install webhook: no agency token for this company; waiting for OAuth callback');
+      return;
+    }
+    await connectLocationFromAgency(companyId, locationId);
+  });
+});

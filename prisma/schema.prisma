@@ -37,8 +37,22 @@ model Integration {
   tokenExpiresAt         DateTime?
   conversationProviderId String?
   provider               String    @default("sendblue")
+  /// Set when installed by an agency: the location's tokens can be re-minted from that agency's token.
+  companyId              String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
+}
+
+/// Agency (Company) token from an agency-level install. Used to mint Location tokens
+/// (POST /oauth/location-token) for the locations the app is installed on.
+model AgencyIntegration {
+  id              String    @id @default(uuid())
+  companyId       String    @unique
+  ghlAccessToken  String
+  ghlRefreshToken String
+  tokenExpiresAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Message {

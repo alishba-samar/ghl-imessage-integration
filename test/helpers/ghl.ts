@@ -66,6 +66,21 @@ function defaultResponse(call: GhlCall): Response {
   if (method === 'GET' && path === '/contacts/search/duplicate') {
     return HttpResponse.json({ contact: { id: `contact-${(call.query.number ?? '').slice(-4)}` } });
   }
+  if (method === 'GET' && path === '/oauth/installed-locations') {
+    return HttpResponse.json({ items: [], pagination: { hasNextPage: false } });
+  }
+  if (method === 'POST' && path === '/oauth/location-token') {
+    const n = next();
+    return HttpResponse.json({
+      access_token: `loc-access-${n}`,
+      refresh_token: `loc-refresh-${n}`,
+      token_type: 'Bearer',
+      expires_in: 86399,
+      locationId: call.body?.locationId,
+      userId: 'user-1',
+      appId: 'test-app-id',
+    });
+  }
   if (method === 'GET' && /^\/contacts\/[^/]+$/.test(path)) {
     return HttpResponse.json({ contact: { id: path.split('/')[2] } });
   }

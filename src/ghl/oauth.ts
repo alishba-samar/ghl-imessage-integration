@@ -47,7 +47,11 @@ function clientCredentials(): { client_id: string; client_secret: string } {
   return { client_id: env.GHL_CLIENT_ID, client_secret: env.GHL_CLIENT_SECRET };
 }
 
-/** Exchanges the authorization code from /oauth/callback for Location tokens. */
+/**
+ * Exchanges the authorization code from /oauth/callback. We ask for a Location token, but when an agency user
+ * installs the app GHL returns a Company token instead (docs: Authorization/TargetUserSubAccount); the callback
+ * then exchanges it for Location tokens (see agency.ts).
+ */
 export function exchangeCode(code: string): Promise<GhlTokens> {
   return requestToken(
     { grant_type: 'authorization_code', code, user_type: 'Location', redirect_uri: redirectUri() },
@@ -59,9 +63,9 @@ export function exchangeCode(code: string): Promise<GhlTokens> {
  * Exchanges a refresh token for new tokens. GHL refresh tokens are single-use: after this succeeds the
  * old refresh token is invalid, so the returned tokens must be saved.
  */
-export function refreshTokens(refreshToken: string): Promise<GhlTokens> {
+export function refreshTokens(refreshToken: string, userType: 'Location' | 'Company' = 'Location'): Promise<GhlTokens> {
   return requestToken(
-    { grant_type: 'refresh_token', refresh_token: refreshToken, user_type: 'Location', redirect_uri: redirectUri() },
+    { grant_type: 'refresh_token', refresh_token: refreshToken, user_type: userType, redirect_uri: redirectUri() },
     'REFRESH_FAILED',
   );
 }

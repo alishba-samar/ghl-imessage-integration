@@ -21,6 +21,9 @@ const envSchema = z
     // /oauth/callback and token refresh fail with a clear error until they're set.
     GHL_CLIENT_ID: optionalString,
     GHL_CLIENT_SECRET: optionalString,
+    // Marketplace app id, required by GET /oauth/installed-locations for agency installs. Defaults to the part of
+    // GHL_CLIENT_ID before the first "-" (GHL client ids look like "<appId>-<suffix>").
+    GHL_APP_ID: optionalString,
     // Redirect URL registered on the GHL app, sent as redirect_uri on token requests.
     // Defaults to PUBLIC_BASE_URL + "/oauth/callback".
     GHL_OAUTH_REDIRECT_URI: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),

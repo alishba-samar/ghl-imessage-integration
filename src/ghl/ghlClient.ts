@@ -2,6 +2,7 @@ import { prisma } from '../config/db';
 import { decryptSecret, encryptSecret } from '../utils/crypto';
 import { logger } from '../utils/logger';
 import { GHL_API_BASE_URL, GHL_API_VERSION, GhlError, describeErrorBody, ghlFetch } from './http';
+import { mintLocationToken } from './agency';
 import { refreshTokens, type GhlTokens } from './oauth';
 
 /** Refresh when the access token expires within this window. */
@@ -29,13 +30,14 @@ export interface GhlClient {
 export async function saveTokens(
   locationId: string,
   tokens: GhlTokens,
-  extra: { conversationProviderId?: string } = {},
+  extra: { conversationProviderId?: string; companyId?: string } = {},
 ): Promise<void> {
   const data = {
     ghlAccessToken: encryptSecret(tokens.accessToken),
     ghlRefreshToken: encryptSecret(tokens.refreshToken),
     tokenExpiresAt: tokens.expiresAt,
     ...(extra.conversationProviderId && { conversationProviderId: extra.conversationProviderId }),
+    ...(extra.companyId && { companyId: extra.companyId }),
   };
   await prisma.integration.upsert({ where: { locationId }, create: { locationId, ...data }, update: data });
 }
@@ -127,12 +129,18 @@ async function refreshWithRowLock(locationId: string): Promise<AccessToken> {
 
       let tokens: GhlTokens;
       try {
-        tokens = await refreshTokens(decrypt(row.ghlRefreshToken, locationId));
+        const refreshToken = decrypt(row.ghlRefreshToken, locationId);
+        // Location tokens minted from an agency token may come without a refresh token.
+        if (!refreshToken) throw new GhlError('REFRESH_FAILED', 'No refresh token stored for this location', { locationId });
+        tokens = await refreshTokens(refreshToken);
       } catch (err) {
         if (err instanceof GhlError) {
           logger.warn({ locationId, code: err.code, ...err.details }, 'GHL token refresh failed');
         }
-        throw err;
+        // Installed by an agency: mint a new Location token from the agency token instead.
+        if (!(err instanceof GhlError && err.code === 'REFRESH_FAILED') || !row.companyId) throw err;
+        tokens = await mintLocationToken(row.companyId, locationId);
+        logger.info({ locationId, companyId: row.companyId }, 'GHL location token re-minted from agency token');
       }
 
       await tx.integration.update({

@@ -55,17 +55,11 @@ describe('GET /oauth/callback', () => {
     }
   });
 
-  it('returns 400 without a code, 502 when GHL rejects it, 400 for an agency token', async () => {
+  it('returns 400 without a code and 502 when GHL rejects it (agency installs: ghlAgency.test.ts)', async () => {
     expect((await api().get('/oauth/callback')).status).toBe(400);
 
     ghl.on('POST', TOKEN, () => HttpResponse.json({ error: 'invalid_grant', error_description: 'bad code' }, { status: 400 }));
     expect((await api().get('/oauth/callback?code=BAD')).status).toBe(502);
-
-    ghl.reset();
-    ghl.on('POST', TOKEN, () =>
-      HttpResponse.json({ access_token: 'a', refresh_token: 'r', expires_in: 86399, userType: 'Company', companyId: 'c' }),
-    );
-    expect((await api().get('/oauth/callback?code=AGENCY')).status).toBe(400);
     expect(await prisma.integration.count()).toBe(0);
   });
 });

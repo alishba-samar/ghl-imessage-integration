@@ -1,5 +1,6 @@
 import { Router, type Response } from 'express';
 import { env } from '../config/env';
+import { connectAgencyLocations, saveCompanyTokens } from '../ghl/agency';
 import { saveTokens } from '../ghl/ghlClient';
 import { GhlError } from '../ghl/http';
 import { exchangeCode } from '../ghl/oauth';
@@ -18,10 +19,37 @@ oauthRouter.get('/callback', async (req, res) => {
   try {
     const tokens = await exchangeCode(code);
 
-    // We request Location tokens; an agency (Company) token has no locationId and isn't supported yet.
+    // Agency user installed the app: GHL returns a Company token. Store it and connect each installed location.
+    if (tokens.userType === 'Company' && tokens.companyId) {
+      await saveCompanyTokens(tokens.companyId, tokens);
+      logger.info({ companyId: tokens.companyId, expiresAt: tokens.expiresAt }, 'GHL agency token saved');
+      const result = await connectAgencyLocations(tokens.companyId);
+      const names = result.connected.map((l) => l.name ?? l.locationId);
+      if (result.connected.length === 0) {
+        sendPage(
+          res,
+          result.failed.length > 0 ? 502 : 200,
+          result.failed.length > 0 ? 'Installation incomplete' : 'App installed for the agency',
+          result.failed.length > 0
+            ? 'The app was installed, but no sub-account could be connected. Please try again or contact support.'
+            : 'The app is installed at the agency level, but no sub-accounts were selected. Install it on a sub-account to start messaging.',
+        );
+        return;
+      }
+      sendPage(
+        res,
+        200,
+        'App installed',
+        `The iMessage integration is connected for: ${names.join(', ')}.` +
+          (result.failed.length > 0 ? ` ${result.failed.length} sub-account(s) could not be connected.` : '') +
+          ' You can close this window.',
+      );
+      return;
+    }
+
     if (tokens.userType !== 'Location' || !tokens.locationId) {
-      logger.warn({ userType: tokens.userType, companyId: tokens.companyId }, 'OAuth callback returned a non-Location token');
-      sendPage(res, 400, 'Installation not supported', 'Please install the app on a sub-account (location), not at the agency level.');
+      logger.warn({ userType: tokens.userType, companyId: tokens.companyId }, 'OAuth callback returned an unexpected token type');
+      sendPage(res, 400, 'Installation not supported', 'Please install the app on a sub-account (location) or from the agency.');
       return;
     }
 

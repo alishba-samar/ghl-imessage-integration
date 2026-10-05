@@ -20,6 +20,7 @@ Object.assign(process.env, {
   TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   GHL_CLIENT_ID: 'test-ghl-client-id',
   GHL_CLIENT_SECRET: 'test-ghl-client-secret',
+  GHL_APP_ID: 'test-app-id',
   GHL_CONVERSATION_PROVIDER_ID: 'test-provider-id',
   GHL_WEBHOOK_PUBLIC_KEY: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
   TEST_GHL_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
@@ -52,7 +53,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE "Message", "Suppression", "Integration", "Sender" RESTART IDENTITY CASCADE');
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "Message", "Suppression", "Integration", "AgencyIntegration", "Sender" RESTART IDENTITY CASCADE');
 });
 
 afterEach(async () => {
