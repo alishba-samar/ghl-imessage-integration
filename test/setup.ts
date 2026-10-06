@@ -60,6 +60,7 @@ afterEach(async () => {
   await drainBackgroundTasks();
   const { ghl } = await import('./helpers/ghl');
   ghl.reset();
+  ghlServer.resetHandlers(); // drop per-test handlers added with ghlServer.use()
 });
 
 afterAll(async () => {

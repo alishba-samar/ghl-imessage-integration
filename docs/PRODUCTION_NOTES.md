@@ -74,6 +74,7 @@ Known gaps to resolve before production. One bullet per concern, with the sugges
 
 ## Sendblue behaviour
 
+- **The Sendblue sandbox/free plan can only message verified contacts.** Sends to anyone who hasn't texted the Sendblue number first fail with HTTP 400 (seen live on 2026-10-06). Since then GHL shows Sendblue's own error code/message instead of just "Sendblue returned HTTP 400", and the logs record Sendblue's error fields. *Fix:* a dedicated Sendblue line/plan before messaging real customers.
 - **iMessage silently falls back to SMS.** Sendblue downgrades non-iMessage recipients to SMS and this can't be disabled; it's only visible via `service` / `wasDowngraded`, and `was_downgraded` can be `null` even when `service` is `SMS` (observed 2026-10-01), so check `service`. *Fix:* if a flow must be iMessage-only, call `checkCapability` first (cache results: lookups are limited to 30/hour and 100/day per line).
 - **`GET /api/status` doesn't match the docs.** The live API returns `{ "status": { "status": "SENT" }, "message_handle": ... }` with no service, `was_downgraded`, error fields or timestamps (handled since 2026-10-01). Polling therefore can't fill `service`, and `sentAt` becomes the time we polled. *Fix:* rely on status webhooks as the primary source; treat polling as a fallback only.
 - **No `READ` status.** Sendblue never reports read receipts for outbound messages, so `readAt` stays empty. *Fix:* don't build GHL features that depend on read status for Sendblue.

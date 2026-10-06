@@ -55,12 +55,6 @@ const sendblueMessageSchema = z.object({
 
 type SendblueMessage = z.infer<typeof sendblueMessageSchema>;
 
-/** Documented error body: { status: "ERROR", error_code, message }. */
-const sendblueErrorSchema = z.object({
-  error_code: errorCodeSchema,
-  code: z.string().nullish(),
-  message: z.string().nullish(),
-});
 
 const evaluateServiceSchema = z.object({
   service: z.enum(['iMessage', 'SMS']),
@@ -75,7 +69,7 @@ const PERMANENT_ERROR_CODES = new Set(['4000', '4002']);
 
 type FetchOutcome =
   | { ok: true; status: number; body: unknown }
-  | { ok: false; status: number | null; body: unknown; errorCode: string; errorMessage: string };
+  | { ok: false; status: number | null; body: unknown; errorCode: string; errorMessage: string; errorFields?: Record<string, unknown> };
 
 export class SendblueProvider implements IMessageProvider {
   readonly name = 'sendblue';
@@ -98,7 +92,8 @@ export class SendblueProvider implements IMessageProvider {
 
     if (!res.ok) {
       logger.warn(
-        { provider: this.name, to: input.to, httpStatus: res.status, errorCode: res.errorCode },
+        // sendblueError: Sendblue's own error fields (no request data, no recovery commands), for diagnosis.
+        { provider: this.name, to: input.to, httpStatus: res.status, errorCode: res.errorCode, errorMessage: res.errorMessage, sendblueError: res.errorFields },
         'Sendblue send-message failed',
       );
       return { status: 'FAILED', errorCode: res.errorCode, errorMessage: res.errorMessage };
@@ -252,15 +247,8 @@ export class SendblueProvider implements IMessageProvider {
 
     if (response.ok) return { ok: true, status: response.status, body };
 
-    const err = sendblueErrorSchema.safeParse(body);
-    const apiCode = err.success ? (err.data.error_code ?? err.data.code) : undefined;
-    return {
-      ok: false,
-      status: response.status,
-      body,
-      errorCode: apiCode != null ? String(apiCode) : `HTTP_${response.status}`,
-      errorMessage: (err.success && err.data.message) || `Sendblue returned HTTP ${response.status}`,
-    };
+    const err = extractSendblueError(body, response.status);
+    return { ok: false, status: response.status, body, errorCode: err.code, errorMessage: err.message, errorFields: err.fields };
   }
 }
 
@@ -277,6 +265,45 @@ function unwrapNestedStatus(body: unknown): unknown {
     }
   }
   return body;
+}
+
+const ERROR_CODE_FIELDS = ['error_key', 'code', 'error_code'] as const;
+const ERROR_MESSAGE_FIELDS = ['message', 'error_message', 'error_reason', 'detail', 'error'] as const;
+
+/**
+ * Pulls Sendblue's own error code and message out of an error response, whatever its exact shape: documented
+ * as { status: "ERROR", error_code, message }, but codes can be numbers or keys (e.g. "OPTED_OUT"), `error`
+ * can be a string or an object, and sandbox errors add a `details` object with recovery commands.
+ * Each field is read on its own, so one unexpected type can't hide the others. Falls back to the HTTP status.
+ */
+export function extractSendblueError(body: unknown, httpStatus: number): { code: string; message: string; fields: Record<string, unknown> } {
+  const obj = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const nested = obj.error && typeof obj.error === 'object' ? (obj.error as Record<string, unknown>) : {};
+  const details = obj.details && typeof obj.details === 'object' ? (obj.details as Record<string, unknown>) : {};
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
+
+  const code = ERROR_CODE_FIELDS.map((k) => text(obj[k]) ?? text(nested[k])).find(Boolean);
+  const message =
+    ERROR_MESSAGE_FIELDS.map((k) => text(obj[k])).find(Boolean) ??
+    text(nested.message) ??
+    text(details.message) ??
+    (typeof body === 'string' && body.trim() && body.length <= 300 ? body.trim() : undefined);
+
+  // Known error fields only, truncated: safe to log. `details` contents (recovery curls) are not logged.
+  const fields: Record<string, unknown> = {};
+  for (const k of ['status', ...ERROR_CODE_FIELDS, ...ERROR_MESSAGE_FIELDS]) {
+    const v = text(obj[k]);
+    if (v) fields[k] = v.slice(0, 300);
+  }
+  if (Object.keys(nested).length) fields.errorObjectKeys = Object.keys(nested);
+  if (Object.keys(details).length) fields.detailsKeys = Object.keys(details);
+  if (!Object.keys(fields).length && body !== null && body !== undefined) fields.bodyType = typeof body;
+
+  return {
+    code: code ?? `HTTP_${httpStatus}`,
+    message: message ?? `Sendblue returned HTTP ${httpStatus}`,
+    fields,
+  };
 }
 
 /** Status after a successful send-message call. */
