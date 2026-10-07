@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { isUniqueViolation, prisma } from '../config/db';
 import type { Message } from '../generated/prisma/client';
-import { sendMessageViaProvider } from '../ghl/conversations';
+import { getContactPhone, sendMessageViaProvider } from '../ghl/conversations';
 import { GhlError } from '../ghl/http';
 import { logger } from '../utils/logger';
 import { normalizeToE164 } from '../utils/phone';
@@ -33,7 +33,11 @@ export type WorkflowSendResult =
  * Either way the provider send happens exactly once (dispatchMessage claims the row atomically).
  */
 export async function sendViaGhlWorkflow(input: WorkflowSendInput): Promise<WorkflowSendResult> {
-  const phone = normalizeToE164(input.phone);
+  // Without a "+" country code the number is in some country's national format; guessing a country could pick the
+  // wrong person, so use the E.164 number GHL stores for the contact and only fall back to parsing the given text.
+  const phone = input.phone.trim().startsWith('+')
+    ? normalizeToE164(input.phone)
+    : ((await phoneFromGhlContact(input.locationId, input.contactId)) ?? normalizeToE164(input.phone));
   if (!phone) return { ok: false, error: 'INVALID_PHONE', details: `Invalid phone number: ${input.phone}` };
 
   const suppression = await prisma.suppression.findUnique({
@@ -116,5 +120,24 @@ export async function sendViaGhlWorkflow(input: WorkflowSendInput): Promise<Work
       'GHL Delivery arrived before the send response; merged the reservation into the delivered message',
     );
     return { ok: true, message: merged, duplicate: false };
+  }
+}
+
+/**
+ * GHL fills `{{contact.phone}}` in the location's national format (e.g. "0304 1234567" in Pakistan), which can't be
+ * normalized reliably without knowing the country. The contact record in GHL stores the number in E.164.
+ */
+async function phoneFromGhlContact(locationId: string, contactId: string): Promise<string | null> {
+  try {
+    const stored = await getContactPhone(locationId, contactId);
+    const phone = stored ? normalizeToE164(stored) : null;
+    logger.info({ locationId, contactId, resolved: !!phone }, 'Workflow phone has no country code; looked up the GHL contact phone');
+    return phone;
+  } catch (err) {
+    logger.warn(
+      { locationId, contactId, ...(err instanceof GhlError ? { code: err.code, ...err.details } : { err }) },
+      'Could not read the contact phone from GHL',
+    );
+    return null;
   }
 }

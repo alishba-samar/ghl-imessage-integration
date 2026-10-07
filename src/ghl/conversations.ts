@@ -166,3 +166,10 @@ export async function sendMessageViaProvider(
   }
   return { messageId: parsed.data.messageId, conversationId: parsed.data.conversationId };
 }
+
+/** The contact's phone as stored in GHL (E.164, e.g. "+923001234567"), or null if it has none. */
+export async function getContactPhone(locationId: string, contactId: string): Promise<string | null> {
+  const client = await getGhlClient(locationId);
+  const body = await client.request<{ contact?: { phone?: string | null } }>('GET', `/contacts/${encodeURIComponent(contactId)}`);
+  return body.contact?.phone ?? null;
+}

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireApiKey } from '../middleware/requireApiKey';
 import { sendViaGhlWorkflow } from '../services/workflowSendService';
+import { logger } from '../utils/logger';
 
 export const ghlWorkflowRouter = Router();
 
@@ -32,6 +33,8 @@ const workflowSendSchema = z.object({
 ghlWorkflowRouter.post('/send-imessage', async (req, res) => {
   const parsed = workflowSendSchema.safeParse(req.body);
   if (!parsed.success) {
+    // Logged so a misconfigured workflow body is visible on our side (field names only, no values).
+    logger.warn({ issues: parsed.error.issues.map((i) => i.path.join('.')) }, 'Workflow send rejected: invalid body');
     res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', details: z.prettifyError(parsed.error) });
     return;
   }
@@ -39,6 +42,7 @@ ghlWorkflowRouter.post('/send-imessage', async (req, res) => {
   const result = await sendViaGhlWorkflow(parsed.data);
 
   if (!result.ok) {
+    logger.warn({ locationId: parsed.data.locationId, contactId: parsed.data.contactId, error: result.error }, 'Workflow send not sent');
     res.status(result.error === 'INVALID_PHONE' ? 400 : 200).json({
       ok: false,
       error: result.error,

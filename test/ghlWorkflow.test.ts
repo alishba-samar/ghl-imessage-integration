@@ -144,6 +144,30 @@ describe('POST /api/ghl/workflow/send-imessage', () => {
     expect(await prisma.message.findUniqueOrThrow({ where: { ghlMessageId: res.body.ghlMessageId } })).toMatchObject({ status: 'FAILED', errorCode: 'SUPPRESSED' });
   });
 
+  it('uses the GHL contact phone when the workflow sends a national-format number (e.g. "0304 1234567")', async () => {
+    await seedIntegration();
+    ghl.on('GET', /^\/contacts\/contact-pk$/, () => HttpResponse.json({ contact: { id: 'contact-pk', phone: '+923041234567' } }));
+    const ghlFlow = ghlDeliversVia('after');
+
+    const res = await workflowSend({ contactId: 'contact-pk', phone: '0304 1234567', campaignStep: '7' });
+    await ghlFlow.done();
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(ghl.callsTo('POST', SEND)[0].body.toNumber).toBe('+923041234567');
+    expect((await prisma.message.findFirstOrThrow({ where: { contactId: 'contact-pk' } })).phone).toBe('+923041234567');
+  });
+
+  it('does not guess a country for a number without "+": a US-looking number still uses the GHL contact phone', async () => {
+    await seedIntegration();
+    ghl.on('GET', /^\/contacts\/contact-pk$/, () => HttpResponse.json({ contact: { id: 'contact-pk', phone: '+923041234567' } }));
+    ghlDeliversVia('never');
+
+    await workflowSend({ contactId: 'contact-pk', phone: '3041234567', campaignStep: '8' });
+
+    expect(ghl.callsTo('POST', SEND)[0].body.toNumber).toBe('+923041234567');
+  });
+
   it('returns 401 for a bad key, 400 for invalid input, 200 + error for suppressed / not connected', async () => {
     await seedIntegration(LOC, { conversationProviderId: null });
     await prisma.suppression.create({ data: { locationId: LOC, phone: '+14155550132', reason: 'STOP' } });
