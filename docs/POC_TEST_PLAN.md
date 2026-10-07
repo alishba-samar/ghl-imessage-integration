@@ -186,16 +186,24 @@ In Prisma Studio, open **Suppression**, delete the row for the test phone and sa
 
 ## Results sheet
 
+Live run on **2026-10-07** (05:17–05:32 UTC) against the Railway server, using only the GHL contact **"Failure Test"** (own number, unverified on the Sendblue sandbox, so real sends to it fail). The TL's number was not messaged. **REAL** = a real call to GHL, Sendblue or our live server; **SIMULATED** = we played the customer's phone by posting a correctly signed Sendblue-format webhook to the live server.
+
 | Test | Pass / Fail | Notes (time, what you saw) |
 |---|---|---|
-| Before you start: all items ticked | | |
-| 1.1 Workflow sends the iMessage | | |
-| 1.2 Delivered status shown in GHL | | |
-| 1.3 Reply in GHL + tags updated | | |
-| 1.4 Follow-up does not send | | |
-| 1 (optional) Control run: follow-up sends without reply | | |
-| 2 Manual inbox send delivered | | |
-| 3 Failed message marked failed in GHL | | |
-| 3 Invalid phone rejected (400) | | |
-| 4.1 STOP → suppressed + `imessage-optout` tag | | |
-| 4.2 Sends blocked after STOP | | |
+| Before you start: all items ticked | Partly | REAL: Railway `/health` OK; Sendblue webhooks and GHL Delivery URL point at Railway; app installed (agency install, provider id set). Not verified: the workflow's Custom Webhook URL/key (see 1.1). |
+| 1.1 Workflow sends the iMessage | **Blocked** | REAL: tag `imessage-test` added to Failure Test at 05:25 UTC; the "iMessage POC Test" workflow produced **no processed request** on our server within 6 min (no message row, no "Workflow message sent via GHL" log). Rejected requests (401/400) aren't logged by the app, so check the workflow's Execution Log in GHL. |
+| 1.2 Delivered status shown in GHL | Not possible on sandbox | Needs a verified/real phone (TL). REAL failure statuses do reach GHL (see 3). |
+| 1.3 Reply in GHL + tags updated | **Pass** (after fix) | SIMULATED reply, REAL GHL writes. First run (05:18) failed to insert into GHL: `Incorrect conversationProviderId/type`; fixed (`type: "Custom"`, commit d350a96, deployed 05:24). Re-run 05:24: reply in the contact's conversation (inbound, our provider), `imessage-replied` added, `imessage-campaign-active` removed. |
+| 1.4 Follow-up does not send | **Blocked** | Depends on 1.1. |
+| 1 (optional) Control run: follow-up sends without reply | **Blocked** | Depends on 1.1. |
+| 2 Manual inbox send delivered | Partly | REAL: a send through GHL's Send Message API (05:21) reached our Delivery URL, was sent to Sendblue and marked failed in GHL. "Delivered" needs a verified/real phone (TL). |
+| 3 Failed message marked failed in GHL | **Pass** | REAL: GHL shows failed; our row has Sendblue's own reason: "This contact must be verified before sending messages to it." |
+| 3 Invalid phone rejected (400) | Not run live | Covered by automated tests. |
+| 4.1 STOP → suppressed + `imessage-optout` tag | **Pass** | SIMULATED "STOP" (05:31), REAL effects: suppression row (reason STOP), `imessage-optout` + `imessage-replied` added, STOP shown in GHL. |
+| 4.2 Sends blocked after STOP | **Pass** | REAL calls to the live server: workflow route → `SUPPRESSED`, `/api/imessage/send` → 409; no message row, nothing sent to GHL/Sendblue. Afterwards the suppression row and test tags were removed (contact clean). |
+| Wrong webhook secret rejected | **Pass** | SIMULATED inbound with a wrong `sb-signing-secret` (05:17) → 401, nothing saved, logged "Webhook rejected". |
+
+### Still needed
+
+- **Workflow run (1.1, 1.4, control run):** check the "iMessage POC Test" workflow's Execution Log in GHL for the 05:25 UTC enrollment of Failure Test: trigger (tag `imessage-test`), published, re-entry allowed, Custom Webhook URL = `https://ghl-imessage-integration-production.up.railway.app/api/ghl/workflow/send-imessage`, `x-api-key` = current `INTERNAL_API_KEY`. If the body has a fixed `campaignId`, each new run for the same contact needs a new value (a reused campaign step is treated as a duplicate and not sent).
+- **TL (verified/real iPhone):** a real reply from a phone, a blue-bubble iMessage, and "Delivered" status in GHL. The Sendblue sandbox only messages verified contacts.
