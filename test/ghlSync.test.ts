@@ -23,7 +23,7 @@ describe('inbound replies → GHL', () => {
 
     expect(ghl.callsTo('GET', /^\/contacts\/search\/duplicate$/)[0].query).toEqual({ locationId: LOC, number: PHONE });
     expect(ghl.callsTo('POST', INBOUND)[0].body).toMatchObject({
-      type: 'SMS',
+      type: 'Custom',
       conversationProviderId: 'test-provider-id',
       contactId: 'contact-0121',
       message: 'Sounds good!',

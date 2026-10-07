@@ -10,8 +10,10 @@ import { GhlError } from './http';
 //   POST /conversations/messages/inbound https://marketplace.gohighlevel.com/docs/ghl/conversations/add-an-inbound-message
 //   PUT  /conversations/messages/:messageId/status
 //                                        https://marketplace.gohighlevel.com/docs/ghl/conversations/update-message-status
-// Our iMessage channel is a custom "SMS" conversation provider ("Add new conversation channel"), so inbound
-// messages use type "SMS" and require conversationProviderId (marketplace-modules/ConversationProviders).
+// Our iMessage channel is a custom conversation provider ("Add new conversation channel"); conversationProviderId is
+// required. The ConversationProviders guide says inbound messages for such a channel use type "SMS", but the live API
+// rejects that ("Incorrect conversationProviderId/type", 2026-10-07) and accepts type "Custom" (stored as
+// TYPE_CUSTOM_PROVIDER_SMS in the same conversation as our outbound TYPE_CUSTOM_SMS messages).
 
 /** Statuses GHL accepts on Update message status. */
 export type GhlMessageStatus = 'pending' | 'delivered' | 'read' | 'failed';
@@ -58,7 +60,7 @@ export async function addInboundMessage(
   const client = await getGhlClient(locationId);
   const body = await client.request('POST', '/conversations/messages/inbound', {
     body: {
-      type: 'SMS',
+      type: 'Custom',
       conversationProviderId: input.conversationProviderId,
       contactId: input.contactId,
       message: input.message,
